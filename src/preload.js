@@ -5,12 +5,9 @@ const path = require('path');
 // Function to read faces directory
 async function getFaceFiles() {
   try {
-    // In development, look in the public folder
     const facesPath = path.join(__dirname, '../../public/faces');
-    
     console.log('Looking for faces in:', facesPath);
     
-    // Check if directory exists
     try {
       await fs.access(facesPath);
     } catch (err) {
@@ -28,7 +25,35 @@ async function getFaceFiles() {
   }
 }
 
-// Expose the function to the renderer process
+// Function to save student image
+async function saveStudentImage(blob, filename) {
+  try {
+    const facesPath = path.join(__dirname, '../../public/faces');
+    
+    // Ensure faces directory exists
+    try {
+      await fs.access(facesPath);
+    } catch {
+      await fs.mkdir(facesPath, { recursive: true });
+    }
+
+    // Convert Blob to Buffer
+    const arrayBuffer = await blob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    const filePath = path.join(facesPath, filename);
+    await fs.writeFile(filePath, buffer);
+    
+    console.log('Saved student image:', filename);
+    return true;
+  } catch (error) {
+    console.error('Error saving student image:', error);
+    throw error;
+  }
+}
+
+// Expose functions to renderer process
 contextBridge.exposeInMainWorld('api', {
-  getFaceFiles: () => getFaceFiles()
+  getFaceFiles: () => getFaceFiles(),
+  saveStudentImage: (blob, filename) => saveStudentImage(blob, filename)
 });

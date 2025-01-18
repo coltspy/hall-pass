@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import CameraView from './components/CameraView';
+import AddStudent from './components/AddStudent';
 import { FaceRecognitionProvider } from './contexts/FaceRecognitionContext';
+import { UserPlus } from 'lucide-react';
 
 const App = () => {
   const [currentView, setCurrentView] = useState('passes');
@@ -9,7 +11,7 @@ const App = () => {
   const passes = [
     { id: 1, text: 'Bathroom', color: 'bg-blue-500 hover:bg-blue-600' },
     { id: 2, text: 'Nurse', color: 'bg-red-500 hover:bg-red-600' },
-    { id: 3, text: 'Locker', color: 'bg-green-500 hover:bg-green-600' },
+    { id: 3, text: 'Other', color: 'bg-green-500 hover:bg-green-600' },
     { id: 4, text: 'Office', color: 'bg-purple-500 hover:bg-purple-600' }
   ];
 
@@ -26,8 +28,8 @@ const App = () => {
   return (
     <FaceRecognitionProvider>
       <div className="h-screen w-screen bg-gray-100">
-        {currentView === 'passes' ? (
-          <div className="h-full w-full p-8">
+        {currentView === 'passes' && (
+          <div className="h-full w-full p-8 relative">
             <div className="h-full w-full grid grid-cols-2 gap-8">
               {passes.map((pass) => (
                 <button
@@ -42,12 +44,26 @@ const App = () => {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => setCurrentView('addStudent')}
+              className="absolute bottom-8 right-8 bg-gray-800 text-white px-6 py-3 rounded-lg
+                hover:bg-gray-700 transition-colors duration-150 flex items-center gap-2"
+            >
+              <UserPlus size={24} />
+              Add Student
+            </button>
           </div>
-        ) : (
+        )}
+        
+        {currentView === 'camera' && (
           <CameraView 
             selectedPass={selectedPass}
             onBack={handleBack}
           />
+        )}
+
+        {currentView === 'addStudent' && (
+          <AddStudent onBack={handleBack} />
         )}
       </div>
     </FaceRecognitionProvider>

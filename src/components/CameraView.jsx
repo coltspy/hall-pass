@@ -38,7 +38,7 @@ const CameraView = ({ selectedPass, onBack }) => {
   };
 
   const handleMatch = async (matchData) => {
-    if (matchFound) return;
+    if (matchFound) return; // Exit early if already matched
 
     const logData = {
       name: matchData.name,
@@ -47,10 +47,7 @@ const CameraView = ({ selectedPass, onBack }) => {
       confidence: ((1 - matchData.distance) * 100).toFixed(1)
     };
 
-    setMatchFound(true);
-    setMatchInfo(logData);
-    console.log('✅ Hall Pass Logged:', logData);
-
+    // Stop the camera and detection immediately
     if (detectionRef.current) {
       cancelAnimationFrame(detectionRef.current);
       detectionRef.current = null;
@@ -59,6 +56,30 @@ const CameraView = ({ selectedPass, onBack }) => {
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach(track => track.stop());
     }
+
+    // Submit to Google Form
+    try {
+      const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSf1dtbkQAxbW-zX8hFjWgGCrkRP3i-VQMoVO6covVorTDstEg/formResponse';
+      const params = new URLSearchParams({
+        'entry.574170038': logData.name,
+        'entry.444032202': logData.pass,
+        'entry.1644501966': logData.time,
+        'entry.829060897': logData.confidence
+      });
+
+      // Send the form data
+      await fetch(`${formUrl}?${params.toString()}`, {
+        method: 'GET',
+        mode: 'no-cors',
+      });
+      
+      console.log('✅ Hall Pass Logged to Google Form:', logData);
+    } catch (error) {
+      console.error('Error logging to Google Form:', error);
+    }
+
+    setMatchInfo(logData);
+    setMatchFound(true); // Set this after matchInfo is set
 
     setTimeout(() => {
       onBack();
@@ -154,7 +175,7 @@ const CameraView = ({ selectedPass, onBack }) => {
         Selected Pass: <span className="font-bold text-blue-400">{selectedPass}</span>
       </div>
       
-      {!matchFound ? (
+      {(!matchFound || !matchInfo) ? (
         <div className="relative">
           <video
             ref={videoRef}
