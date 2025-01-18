@@ -6,10 +6,10 @@ const FaceRecognitionContext = createContext(null);
 export const FaceRecognitionProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [referenceDescriptor, setReferenceDescriptor] = useState(null);
+  const [referenceProfiles, setReferenceProfiles] = useState([]);
 
   useEffect(() => {
-    const loadModelsAndReference = async () => {
+    const loadModelsAndReferences = async () => {
       try {
         console.log('Preloading face detection models...');
         
@@ -21,20 +21,65 @@ export const FaceRecognitionProvider = ({ children }) => {
         ]);
         console.log('Models loaded successfully');
 
-        // Load and process reference image
-        console.log('Processing reference image...');
-        const img = await faceapi.fetchImage('/faces/colton_spyker.jpg');
-        const detection = await faceapi.detectSingleFace(img)
-          .withFaceLandmarks()
-          .withFaceDescriptor();
+        try {
+          // Get list of face images
+          if (!window.api?.getFaceFiles) {
+            throw new Error('Face file reading API not available');
+          }
 
-        if (!detection) {
-          throw new Error('No face found in reference image');
+          const faceFiles = await window.api.getFaceFiles();
+          console.log('Found face files:', faceFiles);
+
+          if (faceFiles.length === 0) {
+            throw new Error('No face images found in faces directory');
+          }
+
+          // Process all reference images in parallel
+          const profiles = await Promise.all(faceFiles.map(async (filename) => {
+            try {
+              console.log(`Processing ${filename}...`);
+              const img = await faceapi.fetchImage(`/faces/${filename}`);
+              const detection = await faceapi.detectSingleFace(img)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+              if (detection) {
+                // Convert filename (first_last.jpg) to name (First Last)
+                const name = filename
+                  .replace('.jpg', '')
+                  .split('_')
+                  .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(' ');
+
+                return {
+                  name,
+                  descriptor: detection.descriptor
+                };
+              } else {
+                console.warn(`No face detected in ${filename}`);
+                return null;
+              }
+            } catch (err) {
+              console.error(`Error processing ${filename}:`, err);
+              return null;
+            }
+          }));
+
+          // Filter out any failed processing attempts
+          const validProfiles = profiles.filter(profile => profile !== null);
+
+          if (validProfiles.length === 0) {
+            throw new Error('No valid face profiles could be created');
+          }
+
+          setReferenceProfiles(validProfiles);
+          console.log(`Successfully loaded ${validProfiles.length} face profiles`);
+          setIsLoading(false);
+
+        } catch (error) {
+          console.error('Error loading faces:', error);
+          throw new Error(`Failed to load face profiles: ${error.message}`);
         }
-
-        setReferenceDescriptor(detection.descriptor);
-        console.log('Reference face descriptor created and stored');
-        setIsLoading(false);
 
       } catch (error) {
         console.error('Error during preload:', error);
@@ -43,11 +88,11 @@ export const FaceRecognitionProvider = ({ children }) => {
       }
     };
 
-    loadModelsAndReference();
+    loadModelsAndReferences();
   }, []);
 
   return (
-    <FaceRecognitionContext.Provider value={{ isLoading, error, referenceDescriptor }}>
+    <FaceRecognitionContext.Provider value={{ isLoading, error, referenceProfiles }}>
       {children}
     </FaceRecognitionContext.Provider>
   );

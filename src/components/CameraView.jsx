@@ -3,7 +3,7 @@ import * as faceapi from 'face-api.js';
 import { useFaceRecognition } from '../contexts/FaceRecognitionContext';
 
 const CameraView = ({ selectedPass, onBack }) => {
-  const { isLoading: isModelLoading, error: modelError, referenceDescriptor } = useFaceRecognition();
+  const { isLoading: isModelLoading, error: modelError, referenceProfiles } = useFaceRecognition();
   const videoRef = useRef();
   const canvasRef = useRef();
   const detectionRef = useRef();
@@ -12,7 +12,6 @@ const CameraView = ({ selectedPass, onBack }) => {
   const [matchFound, setMatchFound] = useState(false);
   const [matchInfo, setMatchInfo] = useState(null);
 
-  // Show loading or error from context
   useEffect(() => {
     if (modelError) {
       setError(`Model loading error: ${modelError}`);
@@ -22,19 +21,35 @@ const CameraView = ({ selectedPass, onBack }) => {
     }
   }, [isModelLoading, modelError]);
 
-  const handleMatch = async (distance) => {
+  const findBestMatch = (descriptor) => {
+    let bestMatch = null;
+    let bestDistance = Infinity;
+
+    referenceProfiles.forEach(profile => {
+      const distance = faceapi.euclideanDistance(descriptor, profile.descriptor);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestMatch = { ...profile, distance };
+      }
+    });
+
+    // Only return a match if the distance is below threshold
+    return bestMatch && bestMatch.distance < 0.6 ? bestMatch : null;
+  };
+
+  const handleMatch = async (matchData) => {
     if (matchFound) return;
 
-    const matchData = {
-      name: 'Colton Spyker',
+    const logData = {
+      name: matchData.name,
       pass: selectedPass,
       time: new Date().toLocaleTimeString(),
-      confidence: ((1 - distance) * 100).toFixed(1)
+      confidence: ((1 - matchData.distance) * 100).toFixed(1)
     };
 
     setMatchFound(true);
-    setMatchInfo(matchData);
-    console.log('✅ Hall Pass Logged:', matchData);
+    setMatchInfo(logData);
+    console.log('✅ Hall Pass Logged:', logData);
 
     if (detectionRef.current) {
       cancelAnimationFrame(detectionRef.current);
@@ -51,7 +66,7 @@ const CameraView = ({ selectedPass, onBack }) => {
   };
 
   const detectFaces = async () => {
-    if (!videoRef.current || !canvasRef.current || !referenceDescriptor || matchFound) {
+    if (!videoRef.current || !canvasRef.current || !referenceProfiles.length || matchFound) {
       return;
     }
 
@@ -67,19 +82,20 @@ const CameraView = ({ selectedPass, onBack }) => {
       context.clearRect(0, 0, canvas.width, canvas.height);
 
       detections.forEach(detection => {
-        const distance = faceapi.euclideanDistance(detection.descriptor, referenceDescriptor);
-        const isMatch = distance < 0.6;
-
+        const match = findBestMatch(detection.descriptor);
         const box = detection.detection.box;
-        context.strokeStyle = isMatch ? '#00ff00' : '#ff0000';
+        
+        // Draw box
+        context.strokeStyle = match ? '#00ff00' : '#ff0000';
         context.lineWidth = 3;
         context.strokeRect(box.x, box.y, box.width, box.height);
 
-        if (isMatch && !matchFound) {
+        // Draw name if matched
+        if (match) {
           context.font = '24px Arial';
           context.fillStyle = '#00ff00';
-          context.fillText('Colton Spyker', box.x, box.y - 10);
-          handleMatch(distance);
+          context.fillText(match.name, box.x, box.y - 10);
+          handleMatch(match);
         }
       });
 
@@ -94,9 +110,8 @@ const CameraView = ({ selectedPass, onBack }) => {
     }
   };
 
-  // Start camera and detection when models are loaded
   useEffect(() => {
-    if (!isModelLoading && !modelError && referenceDescriptor) {
+    if (!isModelLoading && !modelError && referenceProfiles.length > 0) {
       const startVideo = async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -131,9 +146,8 @@ const CameraView = ({ selectedPass, onBack }) => {
         videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       }
     };
-  }, [isModelLoading, modelError, referenceDescriptor]);
+  }, [isModelLoading, modelError, referenceProfiles]);
 
-  // Same return/render code as before...
   return (
     <div className="relative h-screen w-screen bg-gray-900 flex flex-col items-center justify-center">
       <div className="absolute top-4 left-4 text-white text-xl">
@@ -163,6 +177,7 @@ const CameraView = ({ selectedPass, onBack }) => {
             <div className="mb-2">{matchInfo.name}</div>
             <div className="mb-2">→ {matchInfo.pass}</div>
             <div className="mb-2">{matchInfo.time}</div>
+            <div className="mb-2">Confidence: {matchInfo.confidence}%</div>
           </div>
           <div className="text-gray-300 mt-4">
             Returning to home screen...
@@ -171,7 +186,7 @@ const CameraView = ({ selectedPass, onBack }) => {
       )}
 
       <div className="mt-4 text-white text-xl">
-        {loadingStatus}
+        {isModelLoading ? loadingStatus : `Ready - ${referenceProfiles.length} students loaded`}
       </div>
       {error && (
         <div className="mt-2 text-red-500 text-lg">
