@@ -168,9 +168,11 @@ const AddStudent = ({ onBack }) => {
 
       // Save the file using electron IPC
       await window.api.saveStudentImage(blob, filename);
-
-      // Return to main screen
+      console.log('Student saved successfully');
+      
+      // Go back to main screen
       onBack();
+
     } catch (error) {
       console.error('Error saving student:', error);
     }
